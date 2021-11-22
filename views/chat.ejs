@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ka7Sk0Gln4gmtz2MlQnikT1wXgYsOg+OMhuP+IlRH9sENBO0LRn5q+8nbTov4+1p" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="/public/main.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+    <title>상세페이지</title>
+</head>
+<body>
+  <%- include('nav.html') %>
+  <div class="container p-4 detail">
+
+      <div class="row">
+        <div class="col-3">
+          <ul class="list-group chat-list">
+            <% for(var i = 0; i < chatlist.length ; i++ ) { %>
+              <li class="list-group-item">
+                <h6 class="chat-title" 
+                  data-member1="<%= chatlist[i].member[0] %>"
+                  data-member2="<%= chatlist[i].member[1] %>"
+                  data-id="<%= chatlist[i]._id %>"><%= chatlist[i].title %></h6>
+                <h6 class="text-small">채팅방설명</h6>
+              </li>
+            <% } %>
+          </div>
+    
+          <div class="col-9 p-0">
+            <div class="chat-room">
+              <ul class="list-group chat-content">
+                <!-- <li><span class="chat-box">채팅방1 내용</span></li>
+                <li><span class="chat-box">채팅방1 내용</span></li>
+                <li><span class="chat-box mine">채팅방1 내용</span></li> -->
+              </ul>
+            <div class="input-group">
+
+              <input class="form-control" id="chat-input" name="content">
+              <button class="btn btn-secondary" id="send">전송</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div> 
+</body>
+<script>
+  let chatRoomId;
+  $('#send').on('click',postMessage);
+  $('#chat-input').on('keyup', e =>{
+    if(e.key != 'Enter') return;
+    postMessage();
+  });
+
+  function postMessage() {
+    $.ajax({
+      method : 'post'
+      ,url : '/message'
+      ,data : { content : $('#chat-input').val() , chatRoomId : chatRoomId }
+    }).done(data => {
+      if (data == 'OK') {
+        $('.chat-content').append('<li><span class="chat-box mine">'+$('#chat-input').val()+'<br><sub>'+new Date().toLocaleString()+'</sub></span></li>');
+      }
+    }).fail((error)=>{
+      console.log(error);
+    });
+  }
+
+  
+  $(function () {
+    $('.list-group-item .chat-title').on('click', e => {
+      console.log('trigger',e.target.dataset);
+      switchChatRoom(e.target);
+    });
+    $('.list-group-item .chat-title').trigger('click');
+  });
+
+  /**
+   * 채팅방 클릭시
+   * 
+   * */
+  function switchChatRoom(el){
+    console.log(el.dataset);
+    chatRoomId = el.dataset.id;
+    $.ajax({
+      method : 'get'
+      ,url : '/message?chatRoomId='+ el.dataset.id
+    }).done(data=>{
+      var html = '';
+      data.forEach(content => {
+        var user = $('.chat-list [data-id='+chatRoomId+']').attr('data-member2');
+        content.date = new Date(content.date).toLocaleString()
+        if (user == content.postId) {
+          html += '<li><span class="chat-box mine">'+content.contents+'<br><sub>'+content.date+'</sub></span></li>'
+        }else {
+          html += '<li><span class="chat-box">'+content.contents+'<br><sub>'+content.date+'</sub></span></li>'
+        }
+      });
+      $('.chat-content').html(html);
+    });
+  }
+</script>
+</html>
