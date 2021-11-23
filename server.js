@@ -238,7 +238,13 @@ app.post('/upload', uploader.single('imagefile'), function (req, res) {
 
 app.get('/chatroom/:id', util.isLogin , function (req,res) {
     console.log('채팅방',req.params.id);
-    db.collection('chatroom').find({member : [req.params.id,req.user.id]}).toArray(function (error, result) {
+    var condition = { $or : 
+            [
+                {member : [req.params.id, req.user.id]}, 
+                {member : [req.user.id, req.params.id]}
+            ]
+        };
+    db.collection('chatroom').find(condition).toArray(function (error, result) {
         if (error)  console.log(error);
         console.log('채팅방 검색결과', result); 
         if (result.length == 0 && req.params.id != req.user.id) {
@@ -255,21 +261,14 @@ app.get('/chatroom/:id', util.isLogin , function (req,res) {
                     db.collection('chatroom')
                         .find({ member : req.user.id })
                         .toArray(function (error, result1) {
-                            console.log('insertOne > find',result1);
-                            result1 = result1.filter(T=>{
-                                console.log('T',T.member);
-                                return T.member[1] == req.user.id;
-                            });
+                            console.log('result1', result1);
                             res.render('chat.ejs', {chatlist : result1});
                     });
                 }
             });
         } else {
             db.collection('chatroom').find({member : req.user.id}).toArray(function (error, result3) {
-                result3 = result3.filter(T=>{
-                    console.log('T',T.member);
-                    return T.member[1] == req.user.id;
-                });
+                console.log('result3', result3);
                 res.render('chat.ejs', {chatlist : result3});
             });
         }
@@ -279,10 +278,10 @@ app.get('/chatroom/:id', util.isLogin , function (req,res) {
 /**
  * 채팅내역 조회
  */
-app.get('/message', util.isLogin, (req,res)=>{
-    console.log('get/message',req.query);
+app.get('/dialog', util.isLogin, (req,res)=>{
+    console.log('get/dialog',req.query);
     db.collection('message').find({ chatRoomId : req.query.chatRoomId }).toArray((err,result)=>{
-        console.log('get/message',result);
+        console.log('get/dialog',result);
         res.send(result);
     });
 });
@@ -300,13 +299,68 @@ app.post('/message/',util.isLogin, (req,res)=>{
     db.collection('message').insertOne(postItem,(error,result)=>{
         res.sendStatus(200);
     });
-    // res.writeHead(200,{
-    //     Connection : 'keep-alive'
-    //     ,'Content-Type' : 'text/event-stream'
-    //     ,'Cache-Control' : 'no-cache'
-    // });
+});
 
-    // res.write('event : test\n');
-    // res.write('data : 안녕하세요1\n');
-    // res.write('data : 안녕하세요2\n');
+/**
+ * 1:n 응답을 보내기 위해 response header 를 설정하면 응답을 여러번 보낼 수 있다.
+ */
+app.get('/message', util.isLogin, (req,res)=>{
+    console.log('get/message',req.query);
+    res.writeHead(200, {
+        "Connection": "keep-alive",
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+      }
+    );
+
+    db.collection('message').find({ chatRoomId : req.query.chatRoomId }).toArray((err,result)=>{
+        console.log('get/message',result);
+        res.write('event: testEvent\n');
+        res.write('data: '+JSON.stringify(result)+'\n\n');
+    });
+
+    /**
+     * mongodb change stream 를 설정해 놓으면 db에 변동이 있을때마다 조회 가능하다.
+     * $match 에 조건을 부여 하므로써 일정 부분만 감시하게 된다.
+     */
+    const pipeline = [
+        { 
+            $match : { 'fullDocument.chatRoomId' : req.query.chatRoomId } 
+        }
+    ];
+    console.log('pipeline',pipeline);
+    const collection = db.collection('message');
+    const changeStream = collection.watch(pipeline);//.watch()를 붙이면 DB가 해당 document 를 감시한다.
+    /**
+     * @param result 수정, 삭제 등의 변경된 DB 데이터
+     */
+    console.log('changeStream',changeStream);
+    changeStream.on('change', (result)=>{
+        if(0){
+            console.log('changeStream START====');
+            /*
+            {
+                _id: {
+                    _data: '82619B58890000006D2B022C0100296E5A10042BE5BE7DBB214BC589C6F6E486D3D76946645F69640064619B5889C8CE49FAF819C41F0004'
+                },
+                operationType: 'insert',
+                clusterTime: new Timestamp({ t: 1637570697, i: 109 }),
+                fullDocument: {
+                    _id: new ObjectId("619b5889c8ce49faf819c41f"),
+                    chatRoomId: '619b4c186fe6e59d4362f586',
+                    postId: 'test1',
+                    contents: '5',
+                    date: 2021-11-22T08:44:57.111Z
+                },
+                ns: { db: 'ToDO', coll: 'message' },
+                documentKey: { _id: new ObjectId("619b5889c8ce49faf819c41f") }
+                }
+            */
+            // console.log('result',result);
+            console.log('result.fullDocument',result.fullDocument);//{}
+            console.log('changeStream END======');
+        }
+        res.write('event : testEvent\n');
+        res.write('data : '+JSON.stringify([result.fullDocument])+'\n\n');
+    });
 });
