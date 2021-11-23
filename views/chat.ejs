@@ -31,7 +31,7 @@
             <% } %>
           </div>
     
-          <div class="col-9 p-0">
+          <div class="col-9 p-0">ffffffffffffff
             <div class="chat-room">
               <ul class="list-group chat-content">
                 <!-- <li><span class="chat-box">채팅방1 내용</span></li>
@@ -85,18 +85,26 @@
    * 
    * */
   function switchChatRoom(el){
+    $('.chat-content').empty();
     console.log(el.dataset);
     chatRoomId = el.dataset.id;
+    $.ajax({
+      method: 'GET',
+      url: '/dialog?chatRoomId='+chatRoomId
+    }).done(data =>{
+      Array.isArray(data) && setDialog(data);
+    })
+
     /**
      * 소통채널 생성
      * server sent event 생성
      * 이벤트명은 아무거나 설정하고 데이터는 text 만 가능하다 
      * */
-    eventSource && eventSource.removeEventListener('testEvent',null);
+    eventSource && eventSource.close();
     eventSource = new EventSource('/message?chatRoomId='+chatRoomId);//채널입장
-    eventSource.addEventListener('testEvent', e => {
-      console.log('eventSource', JSON.parse(e.data));
-      setDialog(JSON.parse(e.data))
+    eventSource.addEventListener('testevent', e => {
+      console.log('eventSource', e);
+      setDialog(JSON.parse(e.data));
     });
   }
  
@@ -106,8 +114,8 @@
    * @param {array} data
    */
   function setDialog(data) {
-    var html = '';
-      data.forEach(content => {
+    data.forEach(content => {
+        var html = '';
         var user = $('.chat-list [data-id='+chatRoomId+']').attr('data-member2');
         content.date = new Date(content.date).toLocaleString()
         if (user == content.postId) {
@@ -115,8 +123,9 @@
         }else {
           html += '<li><span class="chat-box">'+content.contents+'<br><sub>'+content.date+'</sub></span></li>'
         }
+        $('.chat-content').append(html);
       });
-      $('.chat-content').html(html);
+      $('.chat-content').scrollTop($('.chat-content').prop('scrollHeight'));
   }
 </script>
 </html>

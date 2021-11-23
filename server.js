@@ -145,7 +145,8 @@ app.get('/fail', function (req,res) {
 
 
 app.get('/login', function (req,res) {
-   res.render('login.ejs');
+    console.log(req);
+    res.render('login.ejs');
 });
 
 app.post('/login', passport.authenticate('local', {failureRedirect : '/fail'}), function(req, res){
@@ -252,7 +253,6 @@ app.get('/chatroom/:id', util.isLogin , function (req,res) {
                 //게시물 작성자 id , 채팅건 유저의 id
                 member : [req.params.id ,req.user.id], 
                 date : new Date(),
-                title : req.params.id + '와 대화'
             }
             db.collection('chatroom').insertOne(data , function (error,result) {
                 if (error)  console.log(error);
@@ -261,7 +261,13 @@ app.get('/chatroom/:id', util.isLogin , function (req,res) {
                     db.collection('chatroom')
                         .find({ member : req.user.id })
                         .toArray(function (error, result1) {
-                            console.log('result1', result1);
+                            result1.forEach(element => {
+                                if (req.user.id == element.member[0]) {
+                                    element.title = element.member[1];
+                                } else {
+                                    element.title = element.member[0];
+                                }
+                            });
                             res.render('chat.ejs', {chatlist : result1});
                     });
                 }
@@ -301,11 +307,12 @@ app.post('/message/',util.isLogin, (req,res)=>{
     });
 });
 
-/**
- * 1:n 응답을 보내기 위해 response header 를 설정하면 응답을 여러번 보낼 수 있다.
- */
+
 app.get('/message', util.isLogin, (req,res)=>{
     console.log('get/message',req.query);
+    /**
+     * 1:n 응답을 보내기 위해 response header 를 설정하면 응답을 여러번 보낼 수 있다.
+     */
     res.writeHead(200, {
         "Connection": "keep-alive",
         "Content-Type": "text/event-stream",
@@ -313,11 +320,6 @@ app.get('/message', util.isLogin, (req,res)=>{
       }
     );
 
-    db.collection('message').find({ chatRoomId : req.query.chatRoomId }).toArray((err,result)=>{
-        console.log('get/message',result);
-        res.write('event: testEvent\n');
-        res.write('data: '+JSON.stringify(result)+'\n\n');
-    });
 
     /**
      * mongodb change stream 를 설정해 놓으면 db에 변동이 있을때마다 조회 가능하다.
@@ -328,15 +330,13 @@ app.get('/message', util.isLogin, (req,res)=>{
             $match : { 'fullDocument.chatRoomId' : req.query.chatRoomId } 
         }
     ];
-    console.log('pipeline',pipeline);
     const collection = db.collection('message');
     const changeStream = collection.watch(pipeline);//.watch()를 붙이면 DB가 해당 document 를 감시한다.
     /**
      * @param result 수정, 삭제 등의 변경된 DB 데이터
      */
-    console.log('changeStream',changeStream);
     changeStream.on('change', (result)=>{
-        if(0){
+        if(1){
             console.log('changeStream START====');
             /*
             {
@@ -360,7 +360,11 @@ app.get('/message', util.isLogin, (req,res)=>{
             console.log('result.fullDocument',result.fullDocument);//{}
             console.log('changeStream END======');
         }
-        res.write('event : testEvent\n');
-        res.write('data : '+JSON.stringify([result.fullDocument])+'\n\n');
+        /* 
+        "event : xxx" 이렇게 쓰면 화면에서  이벤트 수신을 못한다
+        "event: xxx" 붙여서 써야 한다.
+        */
+        res.write('event: testevent\n');
+        res.write(`data: ${JSON.stringify([result.fullDocument])}\n\n`);
     });
 });
