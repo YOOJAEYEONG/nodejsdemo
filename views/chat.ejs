@@ -50,10 +50,10 @@
 </body>
 <script>
   let chatRoomId;
+  var eventSource;
   $('#send').on('click',postMessage);
   $('#chat-input').on('keyup', e =>{
-    if(e.key != 'Enter') return;
-    postMessage();
+    if(e.key == 'Enter')  postMessage();
   });
 
   function postMessage() {
@@ -63,7 +63,8 @@
       ,data : { content : $('#chat-input').val() , chatRoomId : chatRoomId }
     }).done(data => {
       if (data == 'OK') {
-        $('.chat-content').append('<li><span class="chat-box mine">'+$('#chat-input').val()+'<br><sub>'+new Date().toLocaleString()+'</sub></span></li>');
+        console.log(data);
+        // $('.chat-content').append('<li><span class="chat-box mine">'+$('#chat-input').val()+'<br><sub>'+new Date().toLocaleString()+'</sub></span></li>');
       }
     }).fail((error)=>{
       console.log(error);
@@ -80,17 +81,32 @@
   });
 
   /**
-   * 채팅방 클릭시
+   * 채팅방 클릭시 대화 내용 불러오기
    * 
    * */
   function switchChatRoom(el){
     console.log(el.dataset);
     chatRoomId = el.dataset.id;
-    $.ajax({
-      method : 'get'
-      ,url : '/message?chatRoomId='+ el.dataset.id
-    }).done(data=>{
-      var html = '';
+    /**
+     * 소통채널 생성
+     * server sent event 생성
+     * 이벤트명은 아무거나 설정하고 데이터는 text 만 가능하다 
+     * */
+    eventSource && eventSource.removeEventListener('testEvent',null);
+    eventSource = new EventSource('/message?chatRoomId='+chatRoomId);//채널입장
+    eventSource.addEventListener('testEvent', e => {
+      console.log('eventSource', JSON.parse(e.data));
+      setDialog(JSON.parse(e.data))
+    });
+  }
+ 
+
+  /**
+   * 데이터를 받아서 채팅 내역을 보여줌
+   * @param {array} data
+   */
+  function setDialog(data) {
+    var html = '';
       data.forEach(content => {
         var user = $('.chat-list [data-id='+chatRoomId+']').attr('data-member2');
         content.date = new Date(content.date).toLocaleString()
@@ -101,7 +117,6 @@
         }
       });
       $('.chat-content').html(html);
-    });
   }
 </script>
 </html>
