@@ -26,3 +26,9 @@ h4{color: slategray;}
 
   /* chat.ejs */
   .chat-title{cursor: pointer;}
+
+  .other{text-align: right;}
+  .other .message{background-color: darkgrey;}
+  .my-message .message{background-color: royalblue;}
+
+  #chatArea{min-height: calc(100vh - 200px);max-height: calc(100vh - 200px);overflow-y: auto;}

@@ -311,6 +311,9 @@ app.post('/message/',util.isLogin, (req,res)=>{
 app.get('/message', util.isLogin, (req,res)=>{
     console.log('get/message',req.query);
     /**
+     * SSE 를 이용하여 채팅 구현하기
+     * SSE 의 특징으로는 서버 -> 유저에게 일방적으로 통신이 가능하다. 
+     * 양방향으로 통신 하려면 WebSocket 을 이용해야 한다.
      * 1:n 응답을 보내기 위해 response header 를 설정하면 응답을 여러번 보낼 수 있다.
      */
     res.writeHead(200, {
@@ -368,3 +371,96 @@ app.get('/message', util.isLogin, (req,res)=>{
         res.write(`data: ${JSON.stringify([result.fullDocument])}\n\n`);
     });
 });
+
+//////////// WebSocket 기능 추가
+/*
+1. npm install socket.io 라이브러리 설치 
+2. 아래 기능 정의
+
+*/
+const http = require('http').createServer(app);
+const {Server} = require('socket.io');
+const { debug } = require('console');
+const io = new Server(http);
+/*
+(이랬던걸)
+app.listen(8080, function () {
+  console.log('listening on 8080')
+});
+
+(이렇게)
+http.listen(8080, function () {
+  console.log('listening on 8080')
+}); 
+뭘 한거냐면 그냥 간략하게 express를 이용해서 서버를 띄우던걸
+http라는 nodejs 기본 라이브러리 + socket.io를 이용해서 띄운겁니다.
+*/
+http.listen(8086, ()=>{
+    console.log('listening on 8086 WebSocket Server Port');
+});
+
+app.get('/socket', (req,res)=>{
+    res.render('socket.ejs');
+});
+
+let userList = new Map();
+/**
+ * 어떤유저가 접속하면 들어오게 된다.
+ */
+io.on('connection', (socket)=>{
+    // console.log('WebSocekt 접속됨', socket.client.id); 
+    /**
+     * 어떤 유저가 'user-send'라는 이름으로 보내면 수신할 수 있게 된다.
+     */
+    socket.on('user-send', (data)=>{
+        while (data.message.indexOf('\n') > 0) {
+            data = data.replace('\n','\\n');
+        }
+        console.debug('접속된 유저들', socket.nsp.sockets.keys());
+        var sockets = socket.nsp.sockets;
+        console.log('data',data.id,data.username);
+        userList.set(data.id, data.username);
+        console.debug('userList',userList);
+        // 소켓에 접속하지 않은 유저는 목록에서 제외 
+        userList.forEach((value,key) => {
+            console.debug('key',key)
+            var has = false;
+            sockets.forEach(socket => {
+                if (key == socket.id) {
+                    has = true;
+                }
+            });
+            has || userList.delete(key);
+        });
+        var resdata = {
+            userList : Object.fromEntries(userList),
+            data : data
+        }
+        /**
+         * io.emit 은 모은유저에게 보낸다
+         */
+        io.emit('broadcast', resdata);
+        /**
+         * 특정 socket id 를 갖는 유저에게만 전송하는 방법
+         */
+        // io.to(socket.id).emit('broadcast', resdata);
+
+
+        /**
+         * 채팅방을 여러개로 구분하기
+         */
+        socket.on('room1-send', function (data) {
+            /**
+             * 해당 socket 유저를 'room1'이라는 채널에 넣었다.
+             */
+            socket.join('room1');    
+        });
+        socket.on('room1-send', function (data) {
+            /**
+             * socket id 대신 room1 을 넣으면 해당 채널에 들어간 유저에게만 전송이 된다.
+             */
+            socket.to('room1').emit('key','value');    
+        });
+    });
+});
+
